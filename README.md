@@ -1,7 +1,6 @@
 <img src="img/haskell.png" alt="Styleguide Rails Logo" align="left" />
-<img src="img/heroku.png" alt="Styleguide Rails Logo" align="left" />
 <br />
-<h2 align="center">Deploy Haskell apps to Heroku</h2>
+<h2 align="center">Deploy Haskell apps</h2>
 
 <br />
 
@@ -21,7 +20,7 @@ sandbox.
 
 Here's how to go from zero to "hello world" on Heroku. You'll need to
 install the [Haskell Platform](http://www.haskell.org/platform/) and
-the [Heroku Toolbelt](https://toolbelt.herokuapp.com/) on your local
+the [Scalingo CLI](http://cli.scalingo.com/) on your local
 machine, then do this:
 
 ```sh
@@ -32,7 +31,7 @@ cabal sandbox init
 cabal install snap
 cabal exec snap init barebones
 
-# Tell Heroku how to start the server
+# Tell how to start the server
 
 echo 'web: cabal run -- -p $PORT' > Procfile
 
@@ -43,8 +42,8 @@ echo "dist\n.cabal-sandbox\ncabal.sandbox.config" > .gitignore
 git add *
 git commit -m 'Initial commit'
 
-heroku create --stack=cedar-14 --buildpack https://github.com/begriffs/heroku-buildpack-ghc.git
-git push heroku master
+scalingo create my-haskell-app
+git push scalingo master
 ```
 
 **The first deploy is slowest** as the environment downloads and
@@ -57,35 +56,9 @@ The first time you try to deploy a big framework like Yesod the
 compilation can take so long that Heroku cuts it off. If this happens
 fear not, you can build your app with an Anvil server.
 
-```sh
-# Enable Anvil builds
-heroku plugins:install https://github.com/ddollar/heroku-anvil
-
-# Move big build artifacts out of the way or else the upload
-# to Anvil will be very slow
-mkdir -p /tmp/deploy-stash ; mv .cabal-sandbox /tmp/deploy-stash  ; mv dist /tmp/deploy-stash
-
-# Build your slug and cache without any time limits
-heroku build -r -b https://github.com/begriffs/heroku-buildpack-ghc.git
-
-# Use Anvil-generated cache next time we do a regular git push to Heroku
-heroku config:set EXTERNAL_CACHE=$(cat .anvil/cache)
-
-# Bring your sandbox etc back
-mv /tmp/deploy-stash/.cabal-sandbox . ; mv /tmp/deploy-stash/dist .
-```
-
-After the first deploy using Anvil you can go back to the regular
-deploy process. This is because the cabal sandbox etc are cached
-by Anvil and will be retrieved, making future builds incremental
-and fast.
-
-Remember to `heroku config:unset EXTERNAL_CACHE` after your first
-successful regular (post-Anvil) git push.
-
 ### Locking Package Versions
 
-Cabal sometimes gets confused on Heroku and tries installing outdated
+Cabal sometimes gets confused and tries installing outdated
 packages. If you have your app working locally you can constrain the
 remote package versions to match your local environment. Just do this:
 
@@ -98,11 +71,11 @@ git add cabal.config
 
 ### Configuring the Build
 
-You can change build settings through Heroku environment variables.
+You can change build settings through environment variables.
 
 ```sh
 # set the variable of your choice
-heroku config:set VARIABLE=value
+scalingo env-set VARIABLE=value
 ```
 
 Here are the options
@@ -153,8 +126,8 @@ Here are the options
 ### Interacting with a running app
 
 ```sh
-heroku run bash         # shell access
-heroku run cabal repl   # Haskell repl with all app modules loaded
+scalingo run bash         # shell access
+scalingo run cabal repl   # Haskell repl with all app modules loaded
 ```
 
 ### Benefits of this buildpack
@@ -171,7 +144,7 @@ There are a number of ways to improve this buildpack. Please see the
 Github issues for ideas.
 
 In order to contribute to the build script it will help to understand
-how Heroku's deployment process works, and how that affects GHC. Heroku
+how Scalingo's deployment process works, and how that affects GHC. Scalingo
 provides three areas for storing files during build: a cache directory,
 a working directory, and a build directory.
 
@@ -209,36 +182,6 @@ Some packages have external dependencies (i.e. non-Haskell dependencies which ca
 patch -p0 < contribs/DEP.patch
 ```
 to patch the buildpack and proceed. If not, you'll need to modify `bin/compile` yourself. Contributing these changes back as patches is appreciated.
-
-### Building new binaries for Heroku
-
-As new versions of GHC and Cabal are released we should build them for
-Heroku and put them on S3 to speed up future deploys for everyone. Luckily
-the buildpack can do the building too.
-
-Adjust the `GHC_VER` and `CABAL_VER` environment vars and then
-deploy. It will build the new binaries from the standard GHC
-distribution. Then copy the results to S3 like this:
-
-```sh
-heroku run bash
-# now SSH'd into the server
-
-cd /app/vendor
-
-url "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
-unzip awscli-bundle.zip
-awscli-bundle/install
-
-~/.local/lib/aws/bin/aws configure
-# ^^^ answer the configuration questions
-
-tar zcf heroku-ghc-[VERSION].tar.gz ghc-[VERSION]/
-tar zcf heroku-cabal-install-[VERSION].tar.gz cabal-install-[VERSION]/
-
-~/.local/lib/aws/bin/aws s3 cp heroku-ghc-[VERSION].tar.gz s3://[BUCKET]
-~/.local/lib/aws/bin/aws s3 cp heroku-cabal-install-[VERSION].tar.gz s3://[BUCKET]
-```
 
 ### Thanks
 
